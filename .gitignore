@@ -1,0 +1,4 @@
+app/__pycache__
+.env
+venv/
+esp32_firmware_update.ino
