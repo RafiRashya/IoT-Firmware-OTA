@@ -27,13 +27,13 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     // Mengambil data terbaru saat komponen dimount
-    fetch('http://localhost:5000/api/data/latest')
-      .then(response => response.json())
-      .then((data: SensorData) => {
-        setSensorData(data);
-        setSensorHistory([data]);
-      })
-      .catch(error => console.error('Error fetching initial data:', error));
+    // fetch('http://localhost:5000/api/data/latest')
+    //   .then(response => response.json())
+    //   .then((data: SensorData) => {
+    //     setSensorData(data);
+    //     setSensorHistory([data]);
+    //   })
+    //   .catch(error => console.error('Error fetching initial data:', error));
 
     const socket = io('http://localhost:5000');
 
@@ -41,14 +41,48 @@ const Dashboard: React.FC = () => {
       console.log('Connected to WebSocket server');
     });
 
-    socket.on('sensor_update', (data: SensorData) => {
-      setSensorData(data);
+    socket.on('sensor_update', (data: any) => {
+      setSensorData(prev => {
+        const updated = { ...prev };
+        
+        if (data.tipe === "suhu") {
+          updated.suhu = data.nilai;
+        } else if (data.tipe === "kelembabanUdara" && data.node_id === "node2") {
+          updated.kelembaban_udara = data.nilai;
+        } else if (data.tipe === "kelembabanTanah" && data.node_id === "node1") {
+          updated.kelembaban_tanah = data.nilai;
+        }
+    
+        updated.timestamp = data.timestamp;
+    
+        return updated;
+      });
+    
       setSensorHistory(prev => {
-        const newHistory = [...prev, data];
-        // Batasi jumlah data yang disimpan
+        const lastEntry = prev[prev.length - 1] || {
+          suhu: 0,
+          kelembaban_udara: 0,
+          kelembaban_tanah: 0,
+          timestamp: data.timestamp
+        };
+    
+        const newEntry: SensorData = {
+          ...lastEntry,
+          timestamp: data.timestamp,
+        };
+    
+        if (data.tipe === "suhu") {
+          newEntry.suhu = data.nilai;
+        } else if (data.tipe === "kelembabanUdara" && data.node_id === "node2") {
+          newEntry.kelembaban_udara = data.nilai;
+        } else if (data.tipe === "kelembabanTanah" && data.node_id === "node1") {
+          newEntry.kelembaban_tanah = data.nilai;
+        }
+    
+        const newHistory = [...prev, newEntry];
         return newHistory.slice(-MAX_DATA_POINTS);
       });
-    });
+    });    
 
     return () => {
       socket.disconnect();

@@ -19,7 +19,7 @@ function App() {
                 <Layout>
                   <Dashboard />
                 </Layout>
-              </ProtectedRoute>
+              // </ProtectedRoute>
             }
           />
           <Route
@@ -29,7 +29,7 @@ function App() {
                 <Layout>
                   <FirmwareUpload />
                 </Layout>
-              </ProtectedRoute>
+              // </ProtectedRoute>
             }
           />
           <Route path="/" element={<Navigate to="/login" replace />} />
