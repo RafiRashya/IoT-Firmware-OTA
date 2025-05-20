@@ -1,5 +1,6 @@
 import datetime
 from flask import Flask, request, jsonify
+from functools import wraps
 from flask_cors import CORS
 from google.cloud import storage
 from config import Config
@@ -7,6 +8,7 @@ from supabase import create_client, Client
 import paho.mqtt.client as mqtt
 import threading
 import time
+import jwt
 import gzip
 import io
 
@@ -110,7 +112,30 @@ def get_last_version(node_type):
         print("Error saat mengambil versi terakhir:", e)
         return ""
 
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({"error": "Token tidak ditemukan"}), 401
+
+        try:
+            # Hapus 'Bearer ' dari header
+            token = auth_header.split(' ')[1]
+            
+            # Verifikasi token dengan Supabase
+            user = supabase_client.auth.get_user(token)
+            if not user:
+                return jsonify({"error": "Token tidak valid"}), 401
+                
+            return f(*args, **kwargs)
+        except Exception as e:
+            return jsonify({"error": "Token tidak valid"}), 401
+
+    return decorated
+
 @app.route('/upload', methods=['POST'])
+@require_auth
 def upload_firmware():
     """Unggah firmware baru langsung ke Google Cloud Storage."""
     if 'file' not in request.files:
@@ -128,7 +153,7 @@ def upload_firmware():
 
     # Kompresi file dengan gzip
     compressed_buffer = io.BytesIO()
-    with gzip.GzipFile(fileobj=compressed_buffer, mode='wb', compresslevel=9) as gz:
+    with gzip.GzipFile(fileobj=compressed_buffer, mode='wb', compresslevel=9, mtime=0) as gz:
         gz.write(file.read())
     compressed_buffer.seek(0)  # Kembali ke awal buffer untuk dibaca saat upload
 
@@ -153,9 +178,6 @@ def upload_firmware():
         status = "Gagal"
         # Anda bisa menambahkan log error di sini
 
-    # Dapatkan versi terakhir dari history
-    # version_from = get_last_version(node)
-
     # Simpan riwayat ke tabel firmware_history
     history_data = {
         "node_type": node,
@@ -174,6 +196,7 @@ def upload_firmware():
         return jsonify({"error": "Gagal mengunggah firmware"}), 500
 
 @app.route('/latest', methods=['GET'])
+@require_auth
 def get_latest_firmware():
     """Cek firmware terbaru untuk perangkat tertentu dari Supabase."""
     device_type = request.args.get('device_type', 'esp32')
@@ -188,6 +211,7 @@ def get_latest_firmware():
     return jsonify({"error": "Firmware tidak ditemukan"}), 404
 
 @app.route('/history', methods=['GET'])
+@require_auth
 def get_firmware_history():
     node_type = request.args.get('node_type')
     query = supabase_client.table("firmware_history").select("*")
