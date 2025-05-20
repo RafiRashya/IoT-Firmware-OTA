@@ -1,4 +1,4 @@
 app/__pycache__
 .env
 venv/
-esp32_firmware_update.ino
+ota-firmware-lokatani-fc79b07ca142.json
