@@ -12,14 +12,15 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Button,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
+import HistoryIcon from '@mui/icons-material/History';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import logoGreen from '../assets/logo (1).png';
+import Profile from './Profile';
 
 const drawerWidth = 240;
 
@@ -40,15 +41,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const handleNavigation = (path: string) => {
     navigate(path);
     setMobileOpen(false);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
   };
 
   const drawer = (
@@ -80,6 +72,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <ListItemText primary="Upload Firmware" />
           </ListItemButton>
         </ListItem>
+        <ListItem disablePadding>
+          <ListItemButton
+            onClick={() => handleNavigation('/history')}
+            selected={location.pathname === '/history'}
+          >
+            <ListItemIcon>
+              <HistoryIcon />
+            </ListItemIcon>
+            <ListItemText primary="Firmware History" />
+          </ListItemButton>
+        </ListItem>
       </List>
     </div>
   );
@@ -107,9 +110,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {location.pathname === '/dashboard' ? 'Dashboard Monitoring Sensor' : 'Upload Firmware'}
           </Typography>
-          <Button color="inherit" onClick={handleLogout}>
-            Logout
-          </Button>
+          <Profile />
         </Toolbar>
       </AppBar>
 

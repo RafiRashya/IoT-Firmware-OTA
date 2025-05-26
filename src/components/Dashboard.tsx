@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Box } from '@mui/material';
-import { io } from 'socket.io-client';
+import mqtt from 'mqtt';
 import TemperatureChart from './TemperatureChart';
 import HumidityChart from './HumidityChart';
 import SoilMoistureChart from './SoilMoistureChart';
@@ -26,66 +26,77 @@ const Dashboard: React.FC = () => {
   const [sensorHistory, setSensorHistory] = useState<SensorData[]>([]);
 
   useEffect(() => {
-    // Mengambil data terbaru saat komponen dimount
-    // fetch('http://localhost:5000/api/data/latest')
-    //   .then(response => response.json())
-    //   .then((data: SensorData) => {
-    //     setSensorData(data);
-    //     setSensorHistory([data]);
-    //   })
-    //   .catch(error => console.error('Error fetching initial data:', error));
-
-    const socket = io('http://localhost:5000');
-
-    socket.on('connect', () => {
-      console.log('Connected to WebSocket server');
+    // Konfigurasi MQTT client
+    const client = mqtt.connect('wss://s1c71808.ala.asia-southeast1.emqxsl.com:8084/mqtt', {
+      username: 'lokatani',
+      password: 'lokatani711',
+      clean: true,
     });
 
-    socket.on('sensor_update', (data: any) => {
+    client.on('connect', () => {
+      console.log('Connected to MQTT broker');
+      client.subscribe('monitoring/sensor');
+    });
+
+    client.on('message', (topic: string, message: Buffer) => {
+      const data = JSON.parse(message.toString());
+      const timestamp = new Date().toISOString();
+
       setSensorData(prev => {
         const updated = { ...prev };
         
-        if (data.tipe === "suhu") {
-          updated.suhu = data.nilai;
-        } else if (data.tipe === "kelembabanUdara" && data.node_id === "node2") {
-          updated.kelembaban_udara = data.nilai;
-        } else if (data.tipe === "kelembabanTanah" && data.node_id === "node1") {
-          updated.kelembaban_tanah = data.nilai;
+        if (data.node_id === "node1") {
+          if (data.tipe === "kelembabanTanah") {
+            updated.kelembaban_tanah = data.nilai;
+          }
+        } else if (data.node_id === "node2") {
+          data.data.forEach((item: any) => {
+            if (item.tipe === "suhu") {
+              updated.suhu = item.nilai;
+            } else if (item.tipe === "kelembabanUdara") {
+              updated.kelembaban_udara = item.nilai;
+            }
+          });
         }
-    
-        updated.timestamp = data.timestamp;
-    
+        
+        updated.timestamp = timestamp;
         return updated;
       });
-    
+
       setSensorHistory(prev => {
         const lastEntry = prev[prev.length - 1] || {
           suhu: 0,
           kelembaban_udara: 0,
           kelembaban_tanah: 0,
-          timestamp: data.timestamp
+          timestamp: timestamp
         };
-    
+
         const newEntry: SensorData = {
           ...lastEntry,
-          timestamp: data.timestamp,
+          timestamp: timestamp,
         };
-    
-        if (data.tipe === "suhu") {
-          newEntry.suhu = data.nilai;
-        } else if (data.tipe === "kelembabanUdara" && data.node_id === "node2") {
-          newEntry.kelembaban_udara = data.nilai;
-        } else if (data.tipe === "kelembabanTanah" && data.node_id === "node1") {
-          newEntry.kelembaban_tanah = data.nilai;
+
+        if (data.node_id === "node1") {
+          if (data.tipe === "kelembabanTanah") {
+            newEntry.kelembaban_tanah = data.nilai;
+          }
+        } else if (data.node_id === "node2") {
+          data.data.forEach((item: any) => {
+            if (item.tipe === "suhu") {
+              newEntry.suhu = item.nilai;
+            } else if (item.tipe === "kelembabanUdara") {
+              newEntry.kelembaban_udara = item.nilai;
+            }
+          });
         }
-    
+
         const newHistory = [...prev, newEntry];
         return newHistory.slice(-MAX_DATA_POINTS);
       });
-    });    
+    });
 
     return () => {
-      socket.disconnect();
+      client.end();
     };
   }, []);
 
@@ -140,4 +151,4 @@ const Dashboard: React.FC = () => {
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

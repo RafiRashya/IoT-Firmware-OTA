@@ -25,10 +25,52 @@ const FirmwareUpload: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      setFile(event.target.files[0]);
+      const selectedFile = event.target.files[0];
+      validateAndSetFile(selectedFile);
+    }
+  };
+
+  const validateAndSetFile = (file: File) => {
+    const validExtensions = ['.bin', '.hex', '.ino'];
+    const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+    
+    if (!validExtensions.includes(fileExtension)) {
+      setError('Hanya file .bin, .hex, dan .ino yang diperbolehkan');
+      return;
+    }
+    
+    setFile(file);
+    setError(null);
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      validateAndSetFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -51,11 +93,15 @@ const FirmwareUpload: React.FC = () => {
     formData.append('description', description);
 
     try {
-      const response = await fetch('http://localhost:5050/upload', {
+      const token = localStorage.getItem('access_token');
+      const refresh_token = localStorage.getItem('refresh_token');
+      const response = await fetch('https://update-firm-79269000209.asia-southeast2.run.app/upload', {
         method: 'POST',
         body: formData,
         headers: {
           'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(refresh_token && { 'X-Refresh-Token': refresh_token })
         },
         mode: 'cors',
         credentials: 'same-origin'
@@ -154,39 +200,58 @@ const FirmwareUpload: React.FC = () => {
 
             {/* Kolom Kanan - Upload File */}
             <Stack sx={{ width: { xs: '100%', md: '50%' }, height: '100%' }} spacing={2}>
-              <Button
-                variant="outlined"
-                component="label"
+              <Box
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
                 sx={{ 
                   flex: 1,
                   minHeight: '250px',
-                  border: '2px dashed #2E6224',
+                  border: isDragging ? '2px solid #2E6224' : '2px dashed #2E6224',
+                  backgroundColor: isDragging ? 'rgba(46, 98, 36, 0.1)' : 'transparent',
                   color: '#2E6224',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
                   alignItems: 'center',
+                  transition: 'all 0.2s ease-in-out',
+                  cursor: 'pointer',
+                  borderRadius: 1,
+                  position: 'relative',
                   '&:hover': {
-                    border: '2px dashed #1e4117'
+                    border: '2px solid #1e4117',
+                    backgroundColor: 'rgba(46, 98, 36, 0.05)'
                   }
                 }}
               >
+                <input
+                  type="file"
+                  onChange={handleFileChange}
+                  accept=".bin,.hex,.ino"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    cursor: 'pointer'
+                  }}
+                />
                 <CloudUploadIcon sx={{ fontSize: 50, mb: 2 }} />
                 <Typography variant="h6" align="center">
-                  {file ? file.name : 'Pilih File Firmware'}
+                  {file ? file.name : 'Drag file firmware atau klik untuk memilih'}
                 </Typography>
                 {file && (
                   <Typography variant="body2" sx={{ mt: 1 }}>
                     Ukuran: {(file.size / 1024).toFixed(2)} KB
                   </Typography>
                 )}
-                <input
-                  type="file"
-                  hidden
-                  onChange={handleFileChange}
-                  accept=".bin,.hex,.ino"
-                />
-              </Button>
+                <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+                  Mendukung file: .bin, .hex, .ino
+                </Typography>
+              </Box>
 
               <Button
                 type="submit"
@@ -195,15 +260,15 @@ const FirmwareUpload: React.FC = () => {
                 disabled={loading}
                 size="large"
                 sx={{
-                  backgroundColor: '#2E6224',
+                  mt: 2,
+                  bgcolor: '#2E6224',
                   '&:hover': {
-                    backgroundColor: '#1e4117',
-                  },
-                  py: 1.5
+                    bgcolor: '#1e4117'
+                  }
                 }}
               >
                 {loading ? (
-                  <CircularProgress size={24} color="inherit" />
+                  <CircularProgress size={24} sx={{ color: 'white' }} />
                 ) : (
                   'Upload Firmware'
                 )}
@@ -216,4 +281,4 @@ const FirmwareUpload: React.FC = () => {
   );
 };
 
-export default FirmwareUpload; 
+export default FirmwareUpload;
