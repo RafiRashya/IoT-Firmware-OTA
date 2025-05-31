@@ -50,7 +50,7 @@ const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({ data }) => {
     labels: data.map(item => formatTime(item.timestamp)),
     datasets: [
       {
-        label: 'Kelembaban Tanah (%)',
+        label: 'Soil Moisture (%)',
         data: data.map(item => item.kelembaban_tanah),
         borderColor: '#4caf50',
         backgroundColor: 'rgba(76, 175, 80, 0.5)',
@@ -67,7 +67,7 @@ const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({ data }) => {
       },
       title: {
         display: true,
-        text: 'Grafik Kelembaban Tanah',
+        text: 'soil moisture over time',
       },
     },
     scales: {

@@ -46,14 +46,14 @@ const Dashboard: React.FC = () => {
         const updated = { ...prev };
         
         if (data.node_id === "node1") {
-          if (data.tipe === "kelembabanTanah") {
+          if (data.tipe === "SoilMoisture") {
             updated.kelembaban_tanah = data.nilai;
           }
         } else if (data.node_id === "node2") {
           data.data.forEach((item: any) => {
-            if (item.tipe === "suhu") {
+            if (item.tipe === "Temperature") {
               updated.suhu = item.nilai;
-            } else if (item.tipe === "kelembabanUdara") {
+            } else if (item.tipe === "Humidity") {
               updated.kelembaban_udara = item.nilai;
             }
           });
@@ -77,14 +77,14 @@ const Dashboard: React.FC = () => {
         };
 
         if (data.node_id === "node1") {
-          if (data.tipe === "kelembabanTanah") {
+          if (data.tipe === "SOil MOISTURE") {
             newEntry.kelembaban_tanah = data.nilai;
           }
         } else if (data.node_id === "node2") {
           data.data.forEach((item: any) => {
-            if (item.tipe === "suhu") {
+            if (item.tipe === "Temperature") {
               newEntry.suhu = item.nilai;
-            } else if (item.tipe === "kelembabanUdara") {
+            } else if (item.tipe === "Humidity") {
               newEntry.kelembaban_udara = item.nilai;
             }
           });
@@ -111,19 +111,19 @@ const Dashboard: React.FC = () => {
           mb: 4
         }}>
           <SensorCard
-            title="Suhu"
+            title="Temperature"
             value={sensorData.suhu}
             unit="°C"
             icon="thermostat"
           />
           <SensorCard
-            title="Kelembaban Udara"
+            title="Humidity"
             value={sensorData.kelembaban_udara}
             unit="%"
             icon="water_drop"
           />
           <SensorCard
-            title="Kelembaban Tanah"
+            title="Soil Moisture"
             value={sensorData.kelembaban_tanah}
             unit="%"
             icon="grass"

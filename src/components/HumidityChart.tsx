@@ -50,7 +50,7 @@ const HumidityChart: React.FC<HumidityChartProps> = ({ data }) => {
     labels: data.map(item => formatTime(item.timestamp)),
     datasets: [
       {
-        label: 'Kelembaban Udara (%)',
+        label: 'Humidity (%)',
         data: data.map(item => item.kelembaban_udara),
         borderColor: '#2196f3',
         backgroundColor: 'rgba(33, 150, 243, 0.5)',
@@ -67,7 +67,7 @@ const HumidityChart: React.FC<HumidityChartProps> = ({ data }) => {
       },
       title: {
         display: true,
-        text: 'Grafik Kelembaban Udara',
+        text: 'Humidity Over Time',
       },
     },
     scales: {

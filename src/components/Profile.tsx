@@ -15,28 +15,37 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  InputAdornment
+  InputAdornment,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import PersonIcon from '@mui/icons-material/Person';
 import LogoutIcon from '@mui/icons-material/Logout';
-import SettingsIcon from '@mui/icons-material/Settings';
-import Settings from './Settings';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import LockIcon from '@mui/icons-material/Lock';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { useNavigate } from 'react-router-dom';
+import { deleteUser } from '../api/deleteUser';
+import { supabase } from '../lib/supabaseClient';
 
 const Profile: React.FC = () => {
   const { user, signOut, updateUserProfile, updateUserPassword } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newLastName, setNewLastName] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | false>('account');
   const anchorRef = useRef<HTMLButtonElement>(null);
 
   const handleToggle = () => setOpen((prev) => !prev);
@@ -61,14 +70,25 @@ const Profile: React.FC = () => {
     setNewLastName(user?.user_metadata?.last_name || '');
   };
 
+  const handleDeleteConfirmOpen = () => {
+    setDeleteConfirmOpen(true);
+    setOpen(false);
+  };
+
   const handleProfileClose = () => {
     setProfileOpen(false);
     setNewUsername('');
     setNewLastName('');
+    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setDeletePassword('');
     setError(null);
     setSuccess(null);
+  };
+
+  const handleAccordionChange = (panel: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpanded(isExpanded ? panel : false);
   };
 
   const handleProfileUpdate = async () => {
@@ -77,36 +97,137 @@ const Profile: React.FC = () => {
       setError(null);
       setSuccess(null);
 
+      // Handle password change
       if (newPassword) {
-        if (newPassword !== confirmPassword) {
-          setError('Passwords do not match!');
+        if (!currentPassword) {
+          setError('Please enter your current password');
           return;
         }
+        
+        if (newPassword !== confirmPassword) {
+          setError('New passwords do not match');
+          return;
+        }
+        
         if (newPassword.length < 6) {
           setError('Password must be at least 6 characters long');
           return;
         }
+
+        // Verify current password
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: user?.email || '',
+          password: currentPassword
+        });
+
+        if (signInError) {
+          setError('Current password is incorrect');
+          return;
+        }
+
+        // Update password directly
+        const { error: updateError } = await supabase.auth.updateUser({ 
+          password: newPassword 
+        });
+
+        if (updateError) throw updateError;
+
+        setSuccess('Password updated successfully');
+        setNewPassword('');
+        setCurrentPassword('');
+        setConfirmPassword('');
+        
+        // Close dialog after success
+        setTimeout(() => {
+          handleProfileClose();
+        }, 2000);
+        return;
       }
 
+      // Handle profile update (first name and last name)
       if ((newUsername !== user?.user_metadata?.first_name) || (newLastName !== user?.user_metadata?.last_name)) {
         await updateUserProfile({ 
           first_name: newUsername,
           last_name: newLastName 
         });
+        setSuccess('Profile information updated successfully');
+        
+        setTimeout(() => {
+          handleProfileClose();
+        }, 2000);
       }
-
-      if (newPassword) {
-        await updateUserPassword(newPassword);
-      }
-
-      setSuccess('Profile updated successfully!');
-      setTimeout(() => {
-        handleProfileClose();
-      }, 2000);
     } catch (error: any) {
       setError(error.message || 'Failed to update profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!deletePassword || !user) {
+        setError('Please enter your password to confirm account deletion');
+        return;
+      }
+
+      // Verify password first
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email || '',
+        password: deletePassword
+      });
+
+      if (signInError) {
+        setError('Incorrect password. Please try again.');
+        return;
+      }
+
+      // Show detailed warning
+      const confirmDelete = await new Promise<boolean>((resolve) => {
+        const shouldDelete = window.confirm(
+          'WARNING: Deleting your account will:\n\n' +
+          '1. Delete ALL your data permanently\n' +
+          '2. Cancel all active sessions\n' +
+          '3. Disable login to this account\n\n' +
+          'This action cannot be undone. Continue?'
+        );
+        resolve(shouldDelete);
+      });
+
+      if (!confirmDelete) {
+        setLoading(false);
+        return;
+      }
+
+      // Delete user and all associated data
+      const { error: deleteError } = await deleteUser(user.id);
+      if (deleteError) {
+        throw new Error(deleteError);
+      }
+
+      // Clear all local data
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Remove all sessions
+      await supabase.auth.signOut({ scope: 'global' });
+      
+      setSuccess('Your account has been permanently deleted');
+      
+      // Show success message briefly before redirecting
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 2000);
+
+    } catch (error: any) {
+      setError(error.message || 'Failed to delete account');
+      console.error('Delete account error:', error);
+    } finally {
+      setLoading(false);
+      setDeleteConfirmOpen(false);
+      setDeletePassword('');
     }
   };
 
@@ -177,18 +298,6 @@ const Profile: React.FC = () => {
 
               <Button
                 fullWidth
-                startIcon={<SettingsIcon />}
-                onClick={() => {
-                  setSettingsOpen(true);
-                  setOpen(false);
-                }}
-                sx={{ justifyContent: 'flex-start', mb: 1, color: '#2E6224' }}
-              >
-                Settings
-              </Button>
-
-              <Button
-                fullWidth
                 startIcon={<LogoutIcon />}
                 onClick={handleLogout}
                 sx={{ justifyContent: 'flex-start', color: '#d32f2f' }}
@@ -201,139 +310,539 @@ const Profile: React.FC = () => {
       )}
 
       <Dialog open={profileOpen} onClose={handleProfileClose} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ textAlign: 'center', pb: 0 }}>My Profile</DialogTitle>
+        <DialogTitle>
+          <Box display="flex" alignItems="center">
+            <Avatar sx={{ bgcolor: '#2E6224', mr: 2 }}>
+              <PersonIcon />
+            </Avatar>
+            <Typography variant="h6" sx={{ color: '#2E6224', fontWeight: 'bold' }}>My Profile</Typography>
+          </Box>
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, mt: 2, px: 2 }}>
-            <Avatar
-              sx={{
-                width: 120,
-                height: 120,
-                bgcolor: '#2E6224',
-                fontSize: '3rem',
-                mb: 3,
-                border: '4px solid #f5f5f5',
-                transition: 'transform 0.2s',
-                '&:hover': { transform: 'scale(1.05)' }
+          <Box sx={{ mt: 2 }}>
+            <Accordion 
+              expanded={expanded === 'account'} 
+              onChange={handleAccordionChange('account')}
+              sx={{ 
+                mb: 1,
+                '& .MuiAccordionDetails-root': {
+                  bgcolor: '#ffffff',
+                  px: 3,
+                  py: 2
+                }
               }}
             >
-              {getInitial()}
-            </Avatar>
-            <Typography variant="h5" fontWeight="bold" sx={{ color: '#2E6224' }}>
-              {`${user?.user_metadata?.first_name || ''} ${user?.user_metadata?.last_name || ''}`}
-            </Typography>
-            <Typography variant="subtitle1" sx={{
-              color: 'text.secondary',
-              bgcolor: '#f5f5f5',
-              py: 0.5,
-              px: 2,
-              borderRadius: 2,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
-            }}>
-              <Box component="span" sx={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                bgcolor: '#2E6224',
-                display: 'inline-block'
-              }} />
-              {user?.email}
-            </Typography>
-
-            <Divider sx={{ width: '100%', my: 2 }} />
-
-            <Box sx={{ display: 'flex', gap: 2, width: '100%' }}>
-              <TextField
-                label="First Name"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                fullWidth
-                variant="outlined"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <AccountCircle sx={{ color: '#2E6224' }} />
-                    </InputAdornment>
-                  ),
-                  sx: { borderRadius: 2 }
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon sx={{ color: '#2E6224' }} />}
+                sx={{ 
+                  bgcolor: '#f5f5f5',
+                  borderRadius: expanded === 'account' ? '4px 4px 0 0' : '4px',
+                  '&:hover': {
+                    bgcolor: '#e8f5e9'
+                  }
                 }}
-              />
-              
-              <TextField
-                label="Last Name"
-                value={newLastName}
-                onChange={(e) => setNewLastName(e.target.value)}
-                fullWidth
-                variant="outlined"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <AccountCircle sx={{ color: '#2E6224' }} />
-                    </InputAdornment>
-                  ),
-                  sx: { borderRadius: 2 }
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <AccountCircle sx={{ mr: 1, color: '#2E6224' }} />
+                  <Typography sx={{ color: '#2E6224', fontWeight: 'medium' }}>Account Information</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  mb: 3
+                }}>
+                  <Avatar 
+                    sx={{ 
+                      width: 100, 
+                      height: 100, 
+                      bgcolor: '#2E6224',
+                      fontSize: '2.5rem',
+                      mb: 2,
+                      border: '4px solid #e8f5e9'
+                    }}
+                  >
+                    {getInitial()}
+                  </Avatar>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    sx={{ 
+                      color: '#2E6224', 
+                      borderColor: '#2E6224',
+                      '&:hover': {
+                        borderColor: '#23511d',
+                        bgcolor: '#e8f5e9'
+                      }
+                    }}
+                  >
+                    Change Photo
+                  </Button>
+                </Box>
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
+                    Change your profile picture and personal information below
+                  </Typography>
+                  <Box sx={{ 
+                    mt: 2, 
+                    p: 2, 
+                    bgcolor: '#e8f5e9', 
+                    borderRadius: 1,
+                    border: '1px solid #2E6224'
+                  }}>
+                    <Typography variant="body2" color="#2E6224">
+                      • Click "Change Photo" to update your profile picture<br/>
+                      • Update your first and last name in the fields below<br/>
+                      • Click "Save Changes" when you're done
+                    </Typography>
+                  </Box>
+                </Box>
+                <TextField
+                  fullWidth
+                  label="Email"
+                  value={user?.email}
+                  margin="normal"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AccountCircle 
+                          sx={{
+                            color: '#2E6224',
+                            transform: user?.email ? 'scale(1.2)' : 'scale(1)',
+                            transition: 'transform 0.2s ease-in-out'
+                          }}
+                        />
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#2E6224',
+                      },
+                    }
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      transition: 'box-shadow 0.2s ease-in-out',
+                      '&:hover': {
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      },
+                      '&.Mui-focused': {
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      transition: 'all 0.2s ease-in-out',
+                      '&.Mui-focused': {
+                        transform: 'translate(14px, -9px) scale(0.75)'
+                      }
+                    }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  label="First Name"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  margin="normal"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AccountCircle sx={{ color: '#2E6224' }} />
+                      </InputAdornment>
+                    ),
+                    sx: { borderRadius: 2 }
+                  }}
+                />
+                
+                <TextField
+                  fullWidth
+                  label="Last Name"
+                  value={newLastName}
+                  onChange={(e) => setNewLastName(e.target.value)}
+                  margin="normal"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AccountCircle sx={{ color: '#2E6224' }} />
+                      </InputAdornment>
+                    ),
+                    sx: { borderRadius: 2 }
+                  }}
+                />
+                
+                {success && success.includes('information') && (
+                  <Box sx={{ 
+                    mt: 2, 
+                    p: 2, 
+                    bgcolor: '#e8f5e9',
+                    borderRadius: 1,
+                    border: '1px solid #2E6224',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}>
+                    <Typography variant="body2" color="#2E6224">
+                      {success}
+                    </Typography>
+                  </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion 
+              expanded={expanded === 'password'} 
+              onChange={handleAccordionChange('password')}
+              sx={{
+                '& .MuiAccordionDetails-root': {
+                  bgcolor: '#ffffff',
+                  px: 3,
+                  py: 2
+                }
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon sx={{ color: '#2E6224' }} />}
+                sx={{ 
+                  bgcolor: '#f5f5f5',
+                  borderRadius: expanded === 'password' ? '4px 4px 0 0' : '4px',
+                  '&:hover': {
+                    bgcolor: '#e8f5e9'
+                  }
                 }}
-              />
-            </Box>
-            <TextField
-              label="New Password"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              fullWidth
-              variant="outlined"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon sx={{ color: '#2E6224' }} />
-                  </InputAdornment>
-                ),
-                sx: { borderRadius: 2 }
-              }}
-            />
-            <TextField
-              label="Confirm Password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              fullWidth
-              variant="outlined"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon sx={{ color: '#2E6224' }} />
-                  </InputAdornment>
-                ),
-                sx: { borderRadius: 2 }
-              }}
-            />
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <LockIcon sx={{ mr: 1, color: '#2E6224' }} />
+                  <Typography sx={{ color: '#2E6224', fontWeight: 'medium' }}>Change Password</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    To change your password, follow these steps:
+                  </Typography>
+                  <Box sx={{ 
+                    mt: 2, 
+                    p: 2, 
+                    bgcolor: '#e8f5e9', 
+                    borderRadius: 1,
+                    border: '1px solid #2E6224'
+                  }}>
+                    <Typography variant="body2" color="#2E6224">
+                      1. Enter your current password for verification<br/>
+                      2. Enter your new password (minimum 6 characters)<br/>
+                      3. Confirm your new password<br/>
+                      4. Click "Save Changes" to update
+                    </Typography>
+                  </Box>
+                </Box>
+                <TextField
+                  fullWidth
+                  type="password"
+                  label="Current Password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  margin="normal"
+                  autoComplete="current-password"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockIcon 
+                          sx={{
+                            color: '#2E6224',
+                            transform: currentPassword ? 'scale(1.2)' : 'scale(1)',
+                            transition: 'transform 0.2s ease-in-out'
+                          }}
+                        />
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#2E6224',
+                      },
+                    }
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      transition: 'box-shadow 0.2s ease-in-out',
+                      '&:hover': {
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      },
+                      '&.Mui-focused': {
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      transition: 'all 0.2s ease-in-out',
+                      '&.Mui-focused': {
+                        transform: 'translate(14px, -9px) scale(0.75)'
+                      }
+                    }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  type="password"
+                  label="New Password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  margin="normal"
+                  autoComplete="new-password"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockIcon 
+                          sx={{
+                            color: '#2E6224',
+                            transform: newPassword ? 'scale(1.2)' : 'scale(1)',
+                            transition: 'transform 0.2s ease-in-out'
+                          }}
+                        />
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#2E6224',
+                      },
+                    }
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      transition: 'box-shadow 0.2s ease-in-out',
+                      '&:hover': {
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      },
+                      '&.Mui-focused': {
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      transition: 'all 0.2s ease-in-out',
+                      '&.Mui-focused': {
+                        transform: 'translate(14px, -9px) scale(0.75)'
+                      }
+                    }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  type="password"
+                  label="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  margin="normal"
+                  autoComplete="new-password"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockIcon 
+                          sx={{
+                            color: '#2E6224',
+                            transform: confirmPassword ? 'scale(1.2)' : 'scale(1)',
+                            transition: 'transform 0.2s ease-in-out'
+                          }}
+                        />
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#2E6224',
+                      },
+                    }
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      transition: 'box-shadow 0.2s ease-in-out',
+                      '&:hover': {
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      },
+                      '&.Mui-focused': {
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      transition: 'all 0.2s ease-in-out',
+                      '&.Mui-focused': {
+                        transform: 'translate(14px, -9px) scale(0.75)'
+                      }
+                    }
+                  }}
+                />
+                {success && success.includes('Password') && (
+                  <Box sx={{ 
+                    mt: 2, 
+                    p: 2, 
+                    bgcolor: '#e8f5e9',
+                    borderRadius: 1,
+                    border: '1px solid #2E6224',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}>
+                    <Typography variant="body2" color="#2E6224">
+                      {success}
+                    </Typography>
+                  </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={handleProfileClose} disabled={loading} sx={{ color: '#2E6224', borderRadius: 2 }}>
+          <Button
+            onClick={() => setDeleteConfirmOpen(true)}
+            variant="outlined"
+            sx={{
+              color: '#2E6224',
+              borderColor: '#2E6224',
+              borderRadius: 2,
+              mr: 'auto',
+              '&:hover': {
+                backgroundColor: '#e8f5e9',
+                borderColor: '#23511d'
+              }
+            }}
+          >
+            Delete Account
+          </Button>
+          <Button 
+            onClick={handleProfileClose} 
+            disabled={loading} 
+            variant="outlined"
+            sx={{ 
+              color: '#2E6224', 
+              borderColor: '#2E6224',
+              borderRadius: 2,
+              '&:hover': {
+                backgroundColor: '#e8f5e9',
+                borderColor: '#23511d'
+              }
+            }}
+          >
             Cancel
           </Button>
-          <Button onClick={handleProfileUpdate} disabled={loading} variant="contained" sx={{
-            bgcolor: '#2E6224',
-            '&:hover': { bgcolor: '#23511d' },
-            borderRadius: 2
-          }}>
+          <Button 
+            onClick={handleProfileUpdate} 
+            disabled={loading} 
+            variant="contained" 
+            sx={{
+              bgcolor: '#2E6224',
+              '&:hover': { bgcolor: '#23511d' },
+              borderRadius: 2,
+              ml: 1
+            }}
+          >
             {loading ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={!!error || !!success} autoHideDuration={4000} onClose={() => {
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setDeletePassword('');
+          setError(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2
+          }
+        }}
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" sx={{ color: '#d32f2f' }}>
+            <Avatar sx={{ bgcolor: '#ffebee', mr: 2 }}>
+              <PersonIcon sx={{ color: '#d32f2f' }} />
+            </Avatar>
+            <Typography variant="h6" fontWeight="bold">Delete Account</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom sx={{ mt: 2, color: '#d32f2f' }}>
+            Are you sure you want to delete your account? This action cannot be undone.
+            Please enter your password to confirm.
+          </Typography>
+          <TextField
+            label="Password"
+            type="password"
+            value={deletePassword}
+            onChange={(e) => setDeletePassword(e.target.value)}
+            fullWidth
+            margin="normal"
+            disabled={loading}
+            error={!!error}
+            helperText={error}
+            autoFocus
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LockIcon sx={{ color: '#d32f2f' }} />
+                </InputAdornment>
+              ),
+              sx: { 
+                borderRadius: 2,
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: error ? '#d32f2f' : '#d32f2f',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#c62828',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#d32f2f',
+                }
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button 
+            onClick={() => {
+              setDeleteConfirmOpen(false);
+              setDeletePassword('');
+              setError(null);
+            }} 
+            disabled={loading}
+            variant="outlined"
+            sx={{ 
+              color: '#2E6224',
+              borderColor: '#2E6224',
+              borderRadius: 2,
+              px: 3,
+              '&:hover': {
+                backgroundColor: '#e8f5e9',
+                borderColor: '#23511d'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeleteAccount}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#d32f2f', 
+              '&:hover': { backgroundColor: '#9a0007' },
+              borderRadius: 2,
+              px: 3,
+              ml: 1
+            }}
+            disabled={loading}
+          >
+            {loading ? 'Deleting...' : 'Delete Account'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={!!error} autoHideDuration={4000} onClose={() => {
         setError(null);
-        setSuccess(null);
       }}>
-        <Alert severity={error ? 'error' : 'success'} sx={{ width: '100%' }}>
-          {error || success}
+        <Alert severity="error" sx={{ width: '100%' }}>
+          {error}
         </Alert>
       </Snackbar>
-
-      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 };

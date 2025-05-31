@@ -77,7 +77,7 @@ const FirmwareUpload: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !version || !nodeType) {
-      setError('File, versi, dan tipe node harus diisi');
+      setError('File, version, and node type must be filled'); 
       return;
     }
 
@@ -152,10 +152,10 @@ const FirmwareUpload: React.FC = () => {
             {/* Kolom Kiri - Form Input */}
             <Box sx={{ width: { xs: '100%', md: '50%' } }}>
               <FormControl fullWidth sx={{ mb: 3 }}>
-                <InputLabel>Tipe Perangkat</InputLabel>
+                <InputLabel>Device Type</InputLabel>
                 <Select
                   value={deviceType}
-                  label="Tipe Perangkat"
+                  label="Device Type"
                   onChange={(e) => setDeviceType(e.target.value)}
                 >
                   <MenuItem value="esp32">ESP32</MenuItem>
@@ -163,10 +163,10 @@ const FirmwareUpload: React.FC = () => {
               </FormControl>
 
               <FormControl fullWidth sx={{ mb: 3 }}>
-                <InputLabel>Tipe Node</InputLabel>
+                <InputLabel>Node Type</InputLabel>
                 <Select
                   value={nodeType}
-                  label="Tipe Node"
+                  label="Node Type"
                   onChange={(e) => setNodeType(e.target.value)}
                   required
                 >
@@ -177,7 +177,7 @@ const FirmwareUpload: React.FC = () => {
 
               <TextField
                 fullWidth
-                label="Versi"
+                label="Version"
                 variant="outlined"
                 value={version}
                 onChange={(e) => setVersion(e.target.value)}
@@ -187,13 +187,13 @@ const FirmwareUpload: React.FC = () => {
 
               <TextField
                 fullWidth
-                label="Deskripsi"
+                label="Description"
                 variant="outlined"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 multiline
                 rows={4}
-                placeholder="Masukkan deskripsi perubahan pada firmware terbaru"
+                placeholder="Enter the description of the changes in the latest firmware"
                 sx={{ mb: { xs: 3, md: 0 } }}
               />
             </Box>
@@ -241,7 +241,7 @@ const FirmwareUpload: React.FC = () => {
                 />
                 <CloudUploadIcon sx={{ fontSize: 50, mb: 2 }} />
                 <Typography variant="h6" align="center">
-                  {file ? file.name : 'Drag file firmware atau klik untuk memilih'}
+                  {file ? file.name : 'Upload Firmware'}
                 </Typography>
                 {file && (
                   <Typography variant="body2" sx={{ mt: 1 }}>
@@ -249,7 +249,7 @@ const FirmwareUpload: React.FC = () => {
                   </Typography>
                 )}
                 <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
-                  Mendukung file: .bin, .hex, .ino
+                  Support file: .bin, .hex, .ino
                 </Typography>
               </Box>
 

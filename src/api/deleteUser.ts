@@ -1,39 +1,49 @@
-import { supabase } from '../lib/supabaseClient';
+import { supabaseProjectUrl, supabase } from '../lib/supabaseClient';
 
 export const deleteUser = async (userId: string) => {
   try {
-    // 1. Mark user for deletion to prevent new logins
-    const { error: markError } = await supabase
-      .from('user_preferences')
-      .upsert({
-        user_id: userId,
-        deleted: true,
-        deleted_at: new Date().toISOString()
-      });
-
-    if (markError) {
-      throw markError;
+    if (!userId) {
+       throw new Error('User ID is required for deletion.');
     }
 
-    // 2. Delete user data from all related tables
-    const { error: deleteError } = await supabase.rpc('handle_user_deletion', {
-      user_id: userId
+    // Panggil Edge Function delete-user
+    const edgeFunctionUrl = `${supabaseProjectUrl}/functions/v1/delete-user`;
+
+    console.log(`Calling Edge Function at: ${edgeFunctionUrl}`);
+
+    // Ambil sesi pengguna yang sedang aktif
+    const { data: { session } } = await supabase.auth.getSession();
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    // Tambahkan header Authorization jika sesi ada
+    if (session) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ userId: userId }),
     });
 
-    if (deleteError) {
-      throw deleteError;
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Error from Edge Function:', data);
+      throw new Error(data.error || 'Failed to delete user via Edge Function');
     }
 
-    // 3. Delete user from auth.users (this will trigger our deletion cascade)
-    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+    console.log('User deletion request sent successfully via Edge Function:', data);
 
-    if (authError) {
-      throw authError;
-    }
-
+    // Jika Edge Function berhasil, kembalikan success: true
     return { success: true };
+
   } catch (error: any) {
     console.error('Error deleting user:', error);
+    // Kembalikan error yang diterima dari Edge Function atau error lokal
     return { error: error.message || 'Failed to delete user' };
   }
 };

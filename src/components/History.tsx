@@ -167,7 +167,7 @@ const History: React.FC = () => {
                   {item.node_type}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {format(new Date(item.update_date), 'dd/MM/yy')}
+                  {format(new Date(item.update_date), 'dd/MM/yyyy HH:mm')}
                 </Typography>
               </Box>
 

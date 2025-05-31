@@ -50,7 +50,7 @@ const TemperatureChart: React.FC<TemperatureChartProps> = ({ data }) => {
     labels: data.map(item => formatTime(item.timestamp)),
     datasets: [
       {
-        label: 'Suhu (°C)',
+        label: 'Temperature (°C)',      
         data: data.map(item => item.suhu),
         borderColor: '#f44336',
         backgroundColor: 'rgba(244, 67, 54, 0.5)',
@@ -67,7 +67,7 @@ const TemperatureChart: React.FC<TemperatureChartProps> = ({ data }) => {
       },
       title: {
         display: true,
-        text: 'Grafik Suhu',
+        text: 'Temperature Over Time',
       },
     },
     scales: {

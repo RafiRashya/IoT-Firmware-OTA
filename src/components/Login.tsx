@@ -27,6 +27,19 @@ const Login: React.FC = () => {
     // Optimized auth check using cached session first
     const checkAuth = async () => {
       try {
+        // Check if coming from email confirmation
+        const params = new URLSearchParams(window.location.search);
+        const isEmailConfirmation = params.get('confirmed') === 'true';
+        
+        // If it's email confirmation, clear any existing session
+        if (isEmailConfirmation) {
+          localStorage.removeItem('sb-session');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          await supabase.auth.signOut();
+          return;
+        }
+        
         // Check localStorage first for faster initial load
         const cachedSession = localStorage.getItem('sb-session');
         if (cachedSession) {
@@ -48,7 +61,7 @@ const Login: React.FC = () => {
         const { data: { session } } = await supabase.auth.getSession();
         clearTimeout(timeoutId);
         
-        if (session && isSubscribed) {
+        if (session && isSubscribed && !isEmailConfirmation) {
           localStorage.setItem('sb-session', JSON.stringify(session));
           navigate('/dashboard');
         }
@@ -62,8 +75,13 @@ const Login: React.FC = () => {
 
     // Subscribe ke perubahan auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session && isSubscribed) {
-        // Cache session data
+      if (!session) return;
+      
+      const params = new URLSearchParams(window.location.search);
+      const isEmailConfirmation = params.get('confirmed') === 'true';
+      
+      // Jika sedang dalam proses konfirmasi email, jangan redirect
+      if (!isEmailConfirmation && isSubscribed) {
         localStorage.setItem('sb-session', JSON.stringify(session));
         navigate('/dashboard');
       }
@@ -84,13 +102,13 @@ const Login: React.FC = () => {
 
     // Client-side validation
     if (!email || !password) {
-      setError('Email dan password harus diisi');
+      setError('Email and password are required');
       setLoading(false);
       return;
     }
 
     if (!email.includes('@')) {
-      setError('Format email tidak valid');
+      setError('Invalid email format');
       setLoading(false);
       return;
     }
@@ -98,7 +116,7 @@ const Login: React.FC = () => {
     const controller = new AbortController();
     const loginTimeout = setTimeout(() => {
       controller.abort();
-      setError('Koneksi timeout. Silakan coba lagi.');
+      setError('Connection timeout. Please try again.');
       setLoading(false);
     }, 5000); // Reduced to 5 second timeout
 
@@ -119,7 +137,7 @@ const Login: React.FC = () => {
 
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
-          throw new Error('Email atau password salah');
+          throw new Error('Invalid email or password');
         }
         throw error;
       }
@@ -133,7 +151,7 @@ const Login: React.FC = () => {
       }
 
       if (!access_token || !refresh_token) {
-        throw new Error('Gagal mendapatkan token autentikasi');
+        throw new Error('Failed to get authentication token');
       }
 
       // Store tokens
@@ -190,7 +208,7 @@ const Login: React.FC = () => {
       });
       if (error) {
         if (error.message.toLowerCase().includes('user not found')) {
-          setResetError('Email tidak terdaftar di sistem kami.');
+          setResetError('Email not registered in our system.');
         } else {
           setResetError(error.message);
         }
@@ -257,7 +275,7 @@ const Login: React.FC = () => {
               },
             }}
           >
-            Masuk dengan Google
+            Sign In With Google
           </Button>
 
           <Divider sx={{ width: '100%', mb: 3 }}>
@@ -272,7 +290,7 @@ const Login: React.FC = () => {
               id="email"
               label="Email Address"
               name="email"
-              autoComplete="email"
+              autoComplete="off"
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -291,7 +309,7 @@ const Login: React.FC = () => {
               label="Password"
               type="password"
               id="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyPress={(e) => {
