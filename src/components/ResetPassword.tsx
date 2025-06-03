@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Button, TextField, Typography, Paper, Container } from '@mui/material';
 import { supabase } from '../lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import { PasswordValidator } from '../utils/passwordValidation';
 
 const ResetPassword: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -9,12 +10,32 @@ const ResetPassword: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
   const navigate = useNavigate();
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPassword(newPassword);
+    setIsTyping(true);
+    if (newPassword) {
+      const errors = PasswordValidator.getPasswordValidationErrors(newPassword);
+      setValidationErrors(errors);
+    } else {
+      setValidationErrors([]);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setValidationErrors([]);
 
+    const errors = PasswordValidator.getPasswordValidationErrors(password);
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -26,7 +47,7 @@ const ResetPassword: React.FC = () => {
       if (error) throw error;
       setSuccess(true);
       setTimeout(() => {
-        navigate('/'); // Redirect ke login
+        navigate('/');
       }, 2000);
     } catch (err: any) {
       setError(err.message);
@@ -71,8 +92,23 @@ const ResetPassword: React.FC = () => {
               id="password"
               autoComplete="new-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={handlePasswordChange}
+              error={isTyping && validationErrors.length > 0}
             />
+
+            {validationErrors.length > 0 && (
+              <Box sx={{ mt: 1, backgroundColor: '#ffebee', padding: 2, borderRadius: 1 }}>
+                <Typography color="error" variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  Password Requirements:
+                </Typography>
+                {validationErrors.map((error, index) => (
+                  <Typography key={index} color="error" variant="body2" sx={{ ml: 2 }}>
+                    • {error}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+
             <TextField
               margin="normal"
               required
@@ -85,6 +121,7 @@ const ResetPassword: React.FC = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
+
             {error && (
               <Typography color="error" sx={{ mt: 2 }}>
                 {error}

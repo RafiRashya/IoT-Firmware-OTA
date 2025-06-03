@@ -1,24 +1,53 @@
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, Container, IconButton } from '@mui/material';
+import { Box, Button, TextField, Typography, Paper, Container, IconButton, Link } from '@mui/material';
 import { supabase } from '../lib/supabaseClient';
 import logoWhite from '../assets/logo-white.png';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
+import { PasswordValidator } from '../utils/passwordValidation';
 
 const Signup: React.FC = () => {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPassword(newPassword);
+    setIsTyping(true);
+    if (newPassword) {
+      const errors = PasswordValidator.getPasswordValidationErrors(newPassword);
+      setValidationErrors(errors);
+    } else {
+      setValidationErrors([]);
+    }
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    setLoading(true);    setError(null);
+    setValidationErrors([]);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    // Password validation
+    const errors = PasswordValidator.getPasswordValidationErrors(password);
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      setLoading(false);
+      return;
+    }
 
     try {
       // Sign up with Supabase
@@ -147,7 +176,35 @@ const Signup: React.FC = () => {
               id="password"
               autoComplete="new-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={handlePasswordChange}
+              error={isTyping && validationErrors.length > 0}
+              InputProps={{
+                sx: { borderRadius: 2 }
+              }}
+            />
+            {validationErrors.length > 0 && (
+              <Box sx={{ mt: 2, backgroundColor: '#ffebee', padding: 2, borderRadius: 1 }}>
+                <Typography color="error" variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  Password Requirements:
+                </Typography>
+                {validationErrors.map((error, index) => (
+                  <Typography key={index} color="error" variant="body2" sx={{ ml: 2 }}>
+                    • {error}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="confirmPassword"
+              label="Confirm Password"
+              type="password"
+              id="confirmPassword"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               InputProps={{
                 sx: { borderRadius: 2 }
               }}
@@ -178,11 +235,31 @@ const Signup: React.FC = () => {
                 padding: '12px',
                 borderRadius: 2,
                 textTransform: 'uppercase',
-              }}
-              disabled={loading}
+              }}              disabled={loading}
             >
               {loading ? 'Processing...' : 'SIGN UP'}
             </Button>
+
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Typography variant="body2">
+                Already have an account?{' '}
+                <Link 
+                  component="button"
+                  variant="body2"
+                  onClick={() => navigate('/login')}
+                  sx={{ 
+                    color: '#2E6224',
+                    fontWeight: 'bold',
+                    textDecoration: 'none',
+                    '&:hover': {
+                      textDecoration: 'underline'
+                    }
+                  }}
+                >
+                  Login here
+                </Link>
+              </Typography>
+            </Box>
           </Box>
         </Paper>
       </Container>
@@ -190,4 +267,4 @@ const Signup: React.FC = () => {
   );
 };
 
-export default Signup; 
+export default Signup;

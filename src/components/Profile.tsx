@@ -29,6 +29,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useNavigate } from 'react-router-dom';
 import { deleteUser } from '../api/deleteUser';
 import { supabase } from '../lib/supabaseClient';
+import { PasswordValidator } from '../utils/passwordValidation';
 
 const Profile: React.FC = () => {
   const { user, signOut, updateUserProfile, updateUserPassword } = useAuth();
@@ -46,6 +47,8 @@ const Profile: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | false>('account');
+  const [isTyping, setIsTyping] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const anchorRef = useRef<HTMLButtonElement>(null);
 
   const handleToggle = () => setOpen((prev) => !prev);
@@ -89,6 +92,22 @@ const Profile: React.FC = () => {
 
   const handleAccordionChange = (panel: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
     setExpanded(isExpanded ? panel : false);
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setNewPassword(newPassword);
+    setIsTyping(true);
+    if (newPassword) {
+      const errors = PasswordValidator.getPasswordValidationErrors(newPassword);
+      setValidationErrors(errors);
+    } else {
+      setValidationErrors([]);
+    }
+  };
+
+  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setConfirmPassword(e.target.value);
   };
 
   const handleProfileUpdate = async () => {
@@ -579,13 +598,12 @@ const Profile: React.FC = () => {
                       }
                     }
                   }}
-                />
-                <TextField
+                />                <TextField
                   fullWidth
                   type="password"
                   label="New Password"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={handlePasswordChange}
                   margin="normal"
                   autoComplete="new-password"
                   InputProps={{
@@ -624,12 +642,24 @@ const Profile: React.FC = () => {
                     }
                   }}
                 />
+                {validationErrors.length > 0 && (
+                  <Box sx={{ mt: 1, mb: 2, p: 1, bgcolor: '#ffebee', borderRadius: 1, border: '1px solid #d32f2f' }}>
+                    <Typography color="error" variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      Password Requirements:
+                    </Typography>
+                    {validationErrors.map((error, index) => (
+                      <Typography key={index} color="error" variant="body2" sx={{ ml: 2 }}>
+                        • {error}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
                 <TextField
                   fullWidth
                   type="password"
                   label="Confirm New Password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={handleConfirmPasswordChange}
                   margin="normal"
                   autoComplete="new-password"
                   InputProps={{
@@ -666,9 +696,8 @@ const Profile: React.FC = () => {
                         transform: 'translate(14px, -9px) scale(0.75)'
                       }
                     }
-                  }}
-                />
-                {success && success.includes('Password') && (
+                  }}                />
+                {success && success.includes('Password')&& (
                   <Box sx={{ 
                     mt: 2, 
                     p: 2, 
